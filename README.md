@@ -43,13 +43,29 @@ it solves two daily developer frictions:
 
 ## installation
 
+### one-line install (recommended, zero dependencies)
+
+macos / linux:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/xldplx/plx/main/install.sh | bash
+```
+
+windows (powershell):
+
+```powershell
+irm https://raw.githubusercontent.com/xldplx/plx/main/install.ps1 | iex
+```
+
+these scripts download the latest release binary for your platform, install it onto your `PATH` (`~/.local/bin` on unix, `%LOCALAPPDATA%\plx\bin` on windows), and run `plx setup`.
+
 ### one-line install (go toolchain)
 
 ```bash
 go install github.com/xldplx/plx/cmd/plx@latest
 ```
 
-### pre-compiled binaries (zero dependencies)
+### pre-compiled binaries (manual)
 
 download the latest archive for your platform from [github releases](https://github.com/xldplx/plx/releases):
 - windows: `plx_Windows_x86_64.zip`
@@ -57,7 +73,7 @@ download the latest archive for your platform from [github releases](https://git
 - macos (intel): `plx_Darwin_x86_64.tar.gz`
 - linux: `plx_Linux_x86_64.tar.gz`
 
-extract the `plx` binary into any directory in your `$PATH`.
+extract the `plx` binary into any directory in your `$PATH`, then run `plx setup`.
 
 ### build from source
 
