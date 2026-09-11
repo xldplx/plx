@@ -96,7 +96,8 @@ plx init fish | source
 ### usage
 
 ```bash
-x             # open interactive tui cockpit and cd on enter
+plx           # open interactive tui cockpit and cd on enter
+x             # 1-letter shortcut to open cockpit and cd on enter
 x api         # resolve fuzzy query "api" and jump directly
 ```
 

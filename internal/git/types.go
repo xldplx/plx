@@ -15,4 +15,5 @@ type Repo struct {
 	LastCommitMsg  string   `json:"last_commit_msg"`
 	DirtySummary   string   `json:"dirty_summary"`
 	ChangedFiles   []string `json:"changed_files"`
+	RecentCommits  []string `json:"recent_commits"`
 }

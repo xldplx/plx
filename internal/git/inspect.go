@@ -16,10 +16,11 @@ func Inspect(repoPath string) (*Repo, error) {
 	name := filepath.Base(repoPath)
 
 	repo := &Repo{
-		Name:    name,
-		Path:    repoPath,
-		Branch:  "unknown",
-		IsClean: true,
+		Name:          name,
+		Path:          repoPath,
+		Branch:        "unknown",
+		IsClean:       true,
+		RecentCommits: []string{},
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
@@ -110,15 +111,23 @@ func Inspect(repoPath string) (*Repo, error) {
 		}
 	}
 
-	// 4. Last commit age & message
-	logCmd := exec.CommandContext(ctx, "git", "-C", repoPath, "log", "-1", "--format=%cr%x00%s")
+	// 4. Recent commits (last 3)
+	logCmd := exec.CommandContext(ctx, "git", "-C", repoPath, "log", "-3", "--format=%h%x00%cr%x00%s")
 	if out, err := logCmd.Output(); err == nil {
-		parts := bytes.Split(bytes.TrimSpace(out), []byte{0})
-		if len(parts) >= 1 {
-			repo.LastCommitAge = string(parts[0])
-		}
-		if len(parts) >= 2 {
-			repo.LastCommitMsg = string(parts[1])
+		lines := bytes.Split(bytes.TrimSpace(out), []byte("\n"))
+		for _, line := range lines {
+			line = bytes.TrimRight(line, "\r")
+			parts := bytes.Split(line, []byte{0})
+			if len(parts) >= 3 {
+				hash := string(parts[0])
+				age := string(parts[1])
+				msg := string(parts[2])
+				repo.RecentCommits = append(repo.RecentCommits, fmt.Sprintf("%s · %s · %s", hash, age, msg))
+				if repo.LastCommitAge == "" {
+					repo.LastCommitAge = age
+					repo.LastCommitMsg = msg
+				}
+			}
 		}
 	}
 

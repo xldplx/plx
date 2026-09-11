@@ -39,7 +39,7 @@ func (m Model) View() string {
 	if gap < 1 {
 		gap = 1
 	}
-	sb.WriteString(lipgloss.JoinHorizontal(lipgloss.Center, headerLeft, strings.Repeat("─", gap), headerRight))
+	sb.WriteString(lipgloss.JoinHorizontal(lipgloss.Center, headerLeft, strings.Repeat("-", gap), headerRight))
 	sb.WriteString("\n\n")
 
 	// 2. Filter input box
@@ -141,7 +141,12 @@ func renderPreview(r *git.Repo, width int) string {
 	var lines []string
 	lines = append(lines, fmt.Sprintf("Path: %s", r.Path))
 
-	if r.LastCommitMsg != "" {
+	if len(r.RecentCommits) > 0 {
+		lines = append(lines, "Recent Commits:")
+		for _, c := range r.RecentCommits {
+			lines = append(lines, "  • "+truncate(c, width-6))
+		}
+	} else if r.LastCommitMsg != "" {
 		lines = append(lines, fmt.Sprintf("Last Commit: %s (%s)", r.LastCommitMsg, r.LastCommitAge))
 	}
 

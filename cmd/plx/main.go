@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -108,9 +109,33 @@ func main() {
 		},
 	}
 
+	configEditCmd := &cobra.Command{
+		Use:   "edit",
+		Short: "Open config.toml in your default editor",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cfgFile, err := config.ConfigFilePath()
+			if err != nil {
+				return err
+			}
+			if _, err := os.Stat(cfgFile); os.IsNotExist(err) {
+				_ = config.SaveConfig(cfg)
+			}
+			editor := cfg.DefaultEditor
+			if editor == "" {
+				editor = "code"
+			}
+			c := exec.Command(editor, cfgFile)
+			if runtime.GOOS == "windows" && editor == "code" {
+				c = exec.Command("cmd", "/c", "code", cfgFile)
+			}
+			return c.Start()
+		},
+	}
+	configCmd.AddCommand(configEditCmd)
+
 	setupCmd := &cobra.Command{
 		Use:   "setup",
-		Short: "Automatically install the 'x' shell jump wrapper into your shell profile",
+		Short: "Automatically install the shell jump wrappers into your shell profile",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runSetup()
 		},
@@ -118,7 +143,7 @@ func main() {
 
 	initCmd := &cobra.Command{
 		Use:   "init [powershell|bash|zsh|fish]",
-		Short: "Print shell integration wrapper function for rapid jumping",
+		Short: "Print shell integration wrapper functions for rapid jumping",
 		Args:  cobra.MaximumNArgs(1),
 		Run: func(cmd *cobra.Command, args []string) {
 			shell := "powershell"
@@ -257,7 +282,7 @@ func runSetup() error {
 
 		if data, err := os.ReadFile(profilePath); err == nil {
 			if strings.Contains(string(data), "plx init powershell") {
-				fmt.Printf("✓ plx is already configured in your PowerShell profile:\n  %s\n\nRun '. $PROFILE' or open a new terminal to use 'x'!\n", profilePath)
+				fmt.Printf("✓ plx is already configured in your PowerShell profile:\n  %s\n\nRun '. $PROFILE' or open a new terminal to use 'plx' or 'x'!\n", profilePath)
 				return nil
 			}
 		}
@@ -269,10 +294,10 @@ func runSetup() error {
 		defer f.Close()
 
 		if _, err := f.WriteString(hookSnippet); err != nil {
-			return fmt.Errorf("failed to write to profile: %w", err)
+			return fmt.Errorf("failed to write hook to profile: %w", err)
 		}
 
-		fmt.Printf("✓ Successfully configured plx in your PowerShell profile:\n  %s\n\nTo activate it in this terminal now, run:\n  . $PROFILE\n\nThen type 'x' to jump into your projects!\n", profilePath)
+		fmt.Printf("✓ Successfully configured plx in your PowerShell profile:\n  %s\n\nTo activate it in this terminal now, run:\n  . $PROFILE\n\nThen type 'plx' or 'x' to jump into your projects!\n", profilePath)
 		return nil
 	}
 
@@ -294,7 +319,7 @@ func runSetup() error {
 
 	if data, err := os.ReadFile(targetFile); err == nil {
 		if strings.Contains(string(data), "plx init") {
-			fmt.Printf("✓ plx is already configured in:\n  %s\n\nRun 'source %s' or open a new terminal to use 'x'!\n", targetFile, targetFile)
+			fmt.Printf("✓ plx is already configured in:\n  %s\n\nRun 'source %s' or open a new terminal to use 'plx' or 'x'!\n", targetFile, targetFile)
 			return nil
 		}
 	}
@@ -309,7 +334,7 @@ func runSetup() error {
 		return fmt.Errorf("failed to write to %s: %w", targetFile, err)
 	}
 
-	fmt.Printf("✓ Successfully configured plx in:\n  %s\n\nTo activate it now, run:\n  source %s\n\nThen type 'x' to jump into your projects!\n", targetFile, targetFile)
+	fmt.Printf("✓ Successfully configured plx in:\n  %s\n\nTo activate it now, run:\n  source %s\n\nThen type 'plx' or 'x' to jump into your projects!\n", targetFile, targetFile)
 	return nil
 }
 
@@ -318,35 +343,94 @@ func printShellInit(shell string) {
 	case "powershell", "pwsh":
 		fmt.Println(`function x {
     param([string]$target)
-    $path = if ($target) { plx jump $target } else { plx }
-    if ($path) {
-        $trimmed = ($path | Out-String).Trim()
+    $exe = (Get-Command plx.exe -CommandType Application -ErrorAction SilentlyContinue).Source
+    if (-not $exe) { return }
+    $p = if ($target) { & $exe jump $target } else { & $exe }
+    if ($p) {
+        $trimmed = ($p | Out-String).Trim()
         if ($trimmed -and (Test-Path -LiteralPath $trimmed)) {
             Set-Location -LiteralPath $trimmed
         }
     }
+}
+function plx {
+    $exe = (Get-Command plx.exe -CommandType Application -ErrorAction SilentlyContinue).Source
+    if (-not $exe) { return }
+    if ($args.Count -eq 0) {
+        $p = & $exe
+        if ($p) {
+            $trimmed = ($p | Out-String).Trim()
+            if ($trimmed -and (Test-Path -LiteralPath $trimmed)) {
+                Set-Location -LiteralPath $trimmed
+            }
+        }
+        return
+    }
+    if ($args[0] -eq 'jump' -and $args.Count -ge 2) {
+        $p = & $exe jump $args[1]
+        if ($p) {
+            $trimmed = ($p | Out-String).Trim()
+            if ($trimmed -and (Test-Path -LiteralPath $trimmed)) {
+                Set-Location -LiteralPath $trimmed
+            }
+        }
+        return
+    }
+    & $exe @args
 }`)
 	case "bash", "zsh":
 		fmt.Println(`x() {
     local target
     if [ $# -eq 0 ]; then
-        target="$(plx)"
+        target="$(command plx)"
     else
-        target="$(plx jump "$@")"
+        target="$(command plx jump "$@")"
     fi
     if [ -n "$target" ] && [ -d "$target" ]; then
         cd "$target" || return 1
+    fi
+}
+plx() {
+    if [ $# -eq 0 ]; then
+        local target
+        target="$(command plx)"
+        if [ -n "$target" ] && [ -d "$target" ]; then
+            cd "$target" || return 1
+        fi
+    elif [ "$1" = "jump" ] && [ -n "$2" ]; then
+        local target
+        target="$(command plx jump "$2")"
+        if [ -n "$target" ] && [ -d "$target" ]; then
+            cd "$target" || return 1
+        fi
+    else
+        command plx "$@"
     fi
 }`)
 	case "fish":
 		fmt.Println(`function x
     if test (count $argv) -eq 0
-        set target (plx)
+        set target (command plx)
     else
-        set target (plx jump $argv)
+        set target (command plx jump $argv)
     end
     if test -n "$target" -a -d "$target"
         cd $target
+    end
+end
+function plx
+    if test (count $argv) -eq 0
+        set target (command plx)
+        if test -n "$target" -a -d "$target"
+            cd $target
+        end
+    else if test "$argv[1]" = "jump" -a (count $argv) -ge 2
+        set target (command plx jump $argv[2])
+        if test -n "$target" -a -d "$target"
+            cd $target
+        end
+    else
+        command plx $argv
     end
 end`)
 	}
