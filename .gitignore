@@ -1,0 +1,26 @@
+# Binaries
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+bin/
+dist/
+plx
+
+# Test binary, built with `go test -c`
+*.test
+
+# Output of the go coverage tool
+*.out
+
+# Local cache & config
+cache.json
+config.local.toml
+*.tmp.*
+
+# OS / Editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
