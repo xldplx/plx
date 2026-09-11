@@ -1,115 +1,148 @@
-# plx ⚡
+# plx
 
-> **Lightweight, local-first workspace flight deck by [@xldplx](https://github.com/xldplx).**  
-> Sub-millisecond perceived startup latency, zero background bloat, and instant situational awareness across all your local Git repositories.
+lightweight, local-first workspace flight deck and context switcher by [@xldplx](https://github.com/xldplx).
 
 ```
-┌── plx : Workspace Cockpit ──────────────────────────────── 14 Repos (3 Dirty) ──┐
-│ Filter: [ api_                           ]                       Sort: [Recent] │
+┌── plx : workspace cockpit ──────────────────────────────── 14 repos (3 dirty) ──┐
+│ filter: [ api_                           ]                       sort: [recent] │
 ├─────────────────────────────────────────────────────────────────────────────────┤
 │ > api-gateway       main     * 2 modified, 1 untracked    ↑1 ↓0   12m ago       │
 │   auth-service      feat/v2    clean                      ↑0 ↓0    1h ago       │
 │   frontend-core     main       clean                      ↑0 ↓2    3h ago       │
 │   infra-terraform   stage    * 4 modified                 ↑0 ↓0    2d ago       │
 ├─────────────────────────────────────────────────────────────────────────────────┤
-│ Path: /Users/matt/src/api-gateway                                               │
-│ Changed: [M] internal/router.go  [M] go.mod  [?] config.local.yaml              │
+│ path: /home/user/src/api-gateway                                                │
+│ changed: [m] internal/router.go  [m] go.mod  [?] config.local.yaml              │
 ├─────────────────────────────────────────────────────────────────────────────────┤
-│ [Enter] Jump   [o] Editor   [r] Rescan   [/] Filter   [q/Esc] Quit              │
+│ [enter] jump   [o] editor   [r] rescan   [/] filter   [q/esc] quit              │
 └─────────────────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## Why `plx`?
+## overview
 
-Modern developers context-switch across dozens of local repositories every single day. Full-blown Git GUIs and heavy multiplexers introduce cognitive friction when you just need:
-1. **Instant visibility:** Which repositories have uncommitted changes or unpushed commits?
-2. **Zero-friction jumping:** Switch to any repository or open it in your editor with two keystrokes.
-3. **Speed:** Starts in $<20\text{ ms}$ with zero background daemons or database servers.
+`plx` is a fast terminal cockpit designed to track, inspect, and jump between local git repositories without background daemons, heavy runtimes, or external databases.
 
----
-
-## Features
-
-- 🚀 **Sub-20ms Startup:** Powered by an atomic, XDG-compliant state cache for instant frame 0 rendering.
-- ⚡ **Concurrent Git Scanner:** Inspects Git branches, porcelain dirty status, ahead/behind upstream counts, and commit ages across 50+ repositories concurrently.
-- 🎯 **Fuzzy Search:** Built-in fuzzy filtering across repository names and directory paths.
-- ⌨️ **Vim-Inspired Keybindings:** `j`/`k` navigation, `/` to search, `Enter` to jump, `o` to launch your editor (`$EDITOR` or VS Code).
-- 🪶 **Zero Bloat:** Compiles to a single, standalone static binary with zero external dependencies.
-- 🔄 **Headless Mode:** Full CLI support with `--json` and tabular output for scripting and shell pipelines.
+it solves two daily developer frictions:
+1. instant situational awareness: see which repositories across your machine have uncommitted changes, untracked files, or unpushed commits.
+2. zero-friction navigation: jump to any project directory or launch your editor in two keystrokes.
 
 ---
 
-## Installation
+## key features
 
-### From Source (Go 1.23+)
+- sub-20ms perceived startup latency using an xdg-compliant atomic state cache.
+- bounded concurrent git scanner evaluating branches, porcelain dirty status, ahead/behind upstream counts, and commit age.
+- interactive tui built on the elm architecture (`bubbletea` + `lipgloss`).
+- real-time fuzzy matching across repository names and file paths.
+- full headless cli support with tabular and json output for shell scripts and pipelines.
+- single static binary with zero external dependencies.
+
+---
+
+## installation
+
+### build from source (requires go 1.23+)
 
 ```bash
 git clone https://github.com/xldplx/plx.git
 cd plx
-go build -o plx ./cmd/plx
+go build -ldflags="-s -w" -o plx ./cmd/plx
 ```
 
-Move `plx` into your `$PATH` (e.g. `/usr/local/bin` on Unix or `C:\Program Files\` / user bin on Windows).
+move the compiled `plx` (or `plx.exe` on windows) into any directory in your `$PATH`.
 
 ---
 
-## Shell Integration (The 1-Letter `x` Jump)
+## shell integration
 
-Add the `plx` wrapper to your shell config so typing `x` launches the interactive cockpit and `cd`'s directly into the chosen repository upon exit:
+`plx` includes a shell integration hook that defines a one-letter `x` shortcut. typing `x` opens the visual cockpit and automatically `cd`s into the selected repository upon exit.
 
-### PowerShell (`$PROFILE`)
+### powershell
+
+add to your `$PROFILE`:
+
 ```powershell
 plx init powershell | Out-String | Invoke-Expression
 ```
 
-### Zsh / Bash (`~/.zshrc` or `~/.bashrc`)
+### zsh / bash
+
+add to your `~/.zshrc` or `~/.bashrc`:
+
 ```bash
 eval "$(plx init zsh)"
 ```
 
-### Usage:
+### fish
+
+add to `~/.config/fish/config.fish`:
+
+```fish
+plx init fish | source
+```
+
+### usage
+
 ```bash
-x             # Launch interactive TUI cockpit and jump on Enter
-x api         # Instantly jump to repository fuzzy-matching "api"
+x             # open interactive tui cockpit and cd on enter
+x api         # resolve fuzzy query "api" and jump directly
 ```
 
 ---
 
-## CLI Command Reference
+## cli reference
 
-```bash
-plx                      # Launch interactive TUI flight deck
-plx list                 # Print tabular status table of all repos
-plx list --dirty         # Only list repos with uncommitted changes
-plx list --json          # Output full repository metadata as JSON
-plx jump <query>         # Emit matched absolute repository path to stdout
-plx scan [path]          # Rescan workspace roots and refresh local cache
-plx config               # Print active configuration and resolved XDG paths
-plx init [shell]         # Print shell wrapper integration
-```
+| command | description |
+| :--- | :--- |
+| `plx` | launch interactive tui flight deck (falls back to `list` when piped) |
+| `plx list` | print tabular overview of discovered repositories |
+| `plx list --dirty` | filter output to only repositories with uncommitted changes |
+| `plx list --json` | emit machine-readable json array of repository metadata |
+| `plx jump <query>` | emit best fuzzy-matched absolute repository path to stdout |
+| `plx scan [path]` | trigger immediate filesystem crawl and refresh state cache |
+| `plx config` | display active configuration and resolved paths |
+| `plx init [shell]` | print shell wrapper script (`powershell`, `zsh`, `bash`, `fish`) |
 
 ---
 
-## Configuration (`config.toml`)
+## tui keybindings
 
-`plx` complies with the **XDG Base Directory Specification**:
-* **Linux/macOS:** `~/.config/plx/config.toml`
-* **Windows:** `%APPDATA%\plx\config.toml`
+| key | action |
+| :--- | :--- |
+| `↑` / `k` | move cursor up |
+| `↓` / `j` | move cursor down |
+| `/` | activate fuzzy filter input |
+| `esc` | clear active filter or exit filter mode |
+| `enter` | select highlighted repository and print path |
+| `o` | open repository in configured editor (`$EDITOR` or `code`) |
+| `r` | trigger concurrent rescan of all workspace roots |
+| `q` / `ctrl+c` | quit |
+
+---
+
+## configuration
+
+configuration is stored in `config.toml` following the xdg base directory specification:
+
+- unix / macos: `~/.config/plx/config.toml`
+- windows: `%APPDATA%\plx\config.toml`
+
+### schema
 
 ```toml
-# Directories to search for Git repositories
+# directories to search for git repositories
 workspace_roots = [
-  "~/Projects",
+  "~/projects",
   "~/src",
-  "~/Desktop"
+  "~/desktop"
 ]
 
-# Max directory depth to traverse for .git markers
+# maximum directory depth to traverse
 max_depth = 4
 
-# Directories skipped during scan
+# directory names to prune from traversal
 ignore_dirs = [
   "node_modules",
   "vendor",
@@ -117,15 +150,31 @@ ignore_dirs = [
   ".cargo",
   "dist",
   ".next",
-  ".venv"
+  ".venv",
+  "build"
 ]
 
-# Editor to open when pressing 'o'
+# editor executable launched with 'o'
 default_editor = "code"
 ```
 
 ---
 
-## License
+## cache & state management
 
-MIT © [Matt (@xldplx)](https://github.com/xldplx)
+`plx` maintains an atomic snapshot cache to ensure instantaneous startup even across hundreds of projects:
+
+- unix / macos: `~/.local/state/plx/cache.json`
+- windows: `%LOCALAPPDATA%\plx\cache.json`
+
+### design guarantees
+- **instant paint:** on boot, the interface renders frame 0 directly from the local cache.
+- **async revalidation:** background workers refresh git states concurrently without locking the ui.
+- **crash resilience:** cache flushes write to `.tmp.<pid>` before issuing an atomic rename, preventing file corruption on abrupt terminal termination.
+- **graceful degradation:** operates entirely in memory if write permissions are unavailable.
+
+---
+
+## license
+
+mit © [matt (@xldplx)](https://github.com/xldplx)
