@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
+	"runtime"
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -32,8 +34,8 @@ func main() {
 	}
 
 	rootCmd := &cobra.Command{
-		Use:   "plx",
-		Short: "plx - Lightweight local-first workspace flight deck by @xldplx",
+		Use:     "plx",
+		Short:   "plx - Lightweight local-first workspace flight deck by @xldplx",
 		Version: fmt.Sprintf("%s (commit: %s, built: %s)", version, commit, date),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			// If not a TTY or explicitly piped, run list
@@ -53,7 +55,7 @@ func main() {
 			}
 
 			if tm, ok := finalModel.(tui.Model); ok && tm.SelectedPath != "" {
-				// Print selected path so shell wrapper can cd
+				// Print selected path cleanly so shell wrapper can cd
 				fmt.Println(tm.SelectedPath)
 			}
 			return nil
@@ -106,6 +108,14 @@ func main() {
 		},
 	}
 
+	setupCmd := &cobra.Command{
+		Use:   "setup",
+		Short: "Automatically install the 'x' shell jump wrapper into your shell profile",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runSetup()
+		},
+	}
+
 	initCmd := &cobra.Command{
 		Use:   "init [powershell|bash|zsh|fish]",
 		Short: "Print shell integration wrapper function for rapid jumping",
@@ -119,7 +129,7 @@ func main() {
 		},
 	}
 
-	rootCmd.AddCommand(listCmd, jumpCmd, scanCmd, configCmd, initCmd)
+	rootCmd.AddCommand(listCmd, jumpCmd, scanCmd, configCmd, setupCmd, initCmd)
 
 	if err := rootCmd.Execute(); err != nil {
 		os.Exit(1)
@@ -162,7 +172,7 @@ func runList(cfg *config.Config) error {
 	}
 
 	fmt.Printf("%-24s %-16s %-24s %-8s %s\n", "NAME", "BRANCH", "STATUS", "SYNC", "PATH")
-	fmt.Println(strings.Repeat("─", 90))
+	fmt.Println(strings.Repeat("-", 90))
 	for _, r := range filtered {
 		sync := fmt.Sprintf("↑%d ↓%d", r.Ahead, r.Behind)
 		fmt.Printf("%-24s %-16s %-24s %-8s %s\n",
@@ -229,17 +239,91 @@ func runScan(cfg *config.Config, args []string) error {
 	return nil
 }
 
+func runSetup() error {
+	if runtime.GOOS == "windows" {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return err
+		}
+
+		psDir := filepath.Join(home, "Documents", "WindowsPowerShell")
+		profilePath := filepath.Join(psDir, "Microsoft.PowerShell_profile.ps1")
+
+		if err := os.MkdirAll(psDir, 0755); err != nil {
+			return err
+		}
+
+		hookSnippet := "\n# plx shell integration (https://github.com/xldplx/plx)\nplx init powershell | Out-String | Invoke-Expression\n"
+
+		if data, err := os.ReadFile(profilePath); err == nil {
+			if strings.Contains(string(data), "plx init powershell") {
+				fmt.Printf("✓ plx is already configured in your PowerShell profile:\n  %s\n\nRun '. $PROFILE' or open a new terminal to use 'x'!\n", profilePath)
+				return nil
+			}
+		}
+
+		f, err := os.OpenFile(profilePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+		if err != nil {
+			return fmt.Errorf("failed to open profile: %w", err)
+		}
+		defer f.Close()
+
+		if _, err := f.WriteString(hookSnippet); err != nil {
+			return fmt.Errorf("failed to write to profile: %w", err)
+		}
+
+		fmt.Printf("✓ Successfully configured plx in your PowerShell profile:\n  %s\n\nTo activate it in this terminal now, run:\n  . $PROFILE\n\nThen type 'x' to jump into your projects!\n", profilePath)
+		return nil
+	}
+
+	// Unix (macOS / Linux)
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return err
+	}
+
+	shell := os.Getenv("SHELL")
+	targetFile := filepath.Join(home, ".bashrc")
+	shellName := "bash"
+	if strings.Contains(shell, "zsh") {
+		targetFile = filepath.Join(home, ".zshrc")
+		shellName = "zsh"
+	}
+
+	hookSnippet := fmt.Sprintf("\n# plx shell integration (https://github.com/xldplx/plx)\neval \"$(plx init %s)\"\n", shellName)
+
+	if data, err := os.ReadFile(targetFile); err == nil {
+		if strings.Contains(string(data), "plx init") {
+			fmt.Printf("✓ plx is already configured in:\n  %s\n\nRun 'source %s' or open a new terminal to use 'x'!\n", targetFile, targetFile)
+			return nil
+		}
+	}
+
+	f, err := os.OpenFile(targetFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		return fmt.Errorf("failed to open %s: %w", targetFile, err)
+	}
+	defer f.Close()
+
+	if _, err := f.WriteString(hookSnippet); err != nil {
+		return fmt.Errorf("failed to write to %s: %w", targetFile, err)
+	}
+
+	fmt.Printf("✓ Successfully configured plx in:\n  %s\n\nTo activate it now, run:\n  source %s\n\nThen type 'x' to jump into your projects!\n", targetFile, targetFile)
+	return nil
+}
+
 func printShellInit(shell string) {
 	switch shell {
 	case "powershell", "pwsh":
 		fmt.Println(`function x {
     param([string]$target)
-    if ($target) {
-        $path = plx jump $target
-        if ($path -and (Test-Path $path)) { Set-Location $path }
-    } else {
-        $path = plx
-        if ($path -and (Test-Path $path)) { Set-Location $path }
+    $path = if ($target) { plx jump $target } else { plx }
+    if ($path) {
+        $trimmed = ($path | Out-String).Trim()
+        if ($trimmed -and (Test-Path -LiteralPath $trimmed)) {
+            Set-Location -LiteralPath $trimmed
+        }
     }
 }`)
 	case "bash", "zsh":

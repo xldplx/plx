@@ -59,7 +59,17 @@ move the compiled `plx` (or `plx.exe` on windows) into any directory in your `$P
 
 `plx` includes a shell integration hook that defines a one-letter `x` shortcut. typing `x` opens the visual cockpit and automatically `cd`s into the selected repository upon exit.
 
-### powershell
+### automatic setup (recommended)
+
+run the setup command to automatically configure your shell profile:
+
+```bash
+plx setup
+```
+
+### manual setup
+
+#### powershell
 
 add to your `$PROFILE`:
 
@@ -102,6 +112,7 @@ x api         # resolve fuzzy query "api" and jump directly
 | `plx list --json` | emit machine-readable json array of repository metadata |
 | `plx jump <query>` | emit best fuzzy-matched absolute repository path to stdout |
 | `plx scan [path]` | trigger immediate filesystem crawl and refresh state cache |
+| `plx setup` | automatically install the 'x' shell hook into your profile |
 | `plx config` | display active configuration and resolved paths |
 | `plx init [shell]` | print shell wrapper script (`powershell`, `zsh`, `bash`, `fish`) |
 

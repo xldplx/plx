@@ -91,9 +91,24 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case scanDoneMsg:
+		selectedPath := ""
+		if len(m.filtered) > 0 && m.cursor < len(m.filtered) {
+			selectedPath = m.filtered[m.cursor].Path
+		}
+
 		m.loading = false
 		m.repos = msg
 		m.applyFilter()
+
+		// Preserve selection across rescans
+		if selectedPath != "" {
+			for i, r := range m.filtered {
+				if r.Path == selectedPath {
+					m.cursor = i
+					break
+				}
+			}
+		}
 		m.statusMsg = fmt.Sprintf("Scanned %d repositories", len(msg))
 		return m, nil
 
@@ -116,6 +131,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			default:
 				m.textInput, cmd = m.textInput.Update(msg)
 				m.applyFilter()
+				m.cursor = 0
 				return m, cmd
 			}
 		}
@@ -135,6 +151,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.textInput.Value() != "" {
 				m.textInput.SetValue("")
 				m.applyFilter()
+				m.cursor = 0
 			}
 
 		case key.Matches(msg, keys.Up):
@@ -201,7 +218,9 @@ func (m *Model) applyFilter() {
 	}
 
 	m.filtered = matchedRepos
-	m.cursor = 0
+	if m.cursor >= len(m.filtered) {
+		m.cursor = max(0, len(m.filtered)-1)
+	}
 }
 
 func max(a, b int) int {
