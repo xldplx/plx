@@ -56,7 +56,7 @@ func (s *Scanner) Scan() ([]*git.Repo, error) {
 	results := make([]*git.Repo, 0, len(paths))
 	var resMu sync.Mutex
 
-	concurrency := 16
+	concurrency := 8
 	semaphore := make(chan struct{}, concurrency)
 	var wg sync.WaitGroup
 

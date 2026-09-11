@@ -56,7 +56,12 @@ func main() {
 			}
 
 			if tm, ok := finalModel.(tui.Model); ok && tm.SelectedPath != "" {
-				// Print selected path cleanly so shell wrapper can cd
+				// Record selected path to state file for shell wrapper
+				if jumpFile, err := config.GetJumpFilePath(); err == nil {
+					_ = os.MkdirAll(filepath.Dir(jumpFile), 0755)
+					_ = os.WriteFile(jumpFile, []byte(tm.SelectedPath), 0644)
+				}
+				// Also print to stdout for piped usage
 				fmt.Println(tm.SelectedPath)
 			}
 			return nil
@@ -232,6 +237,10 @@ func runJump(cfg *config.Config, query string) error {
 	}
 
 	best := repos[matches[0].Index]
+	if jumpFile, err := config.GetJumpFilePath(); err == nil {
+		_ = os.MkdirAll(filepath.Dir(jumpFile), 0755)
+		_ = os.WriteFile(jumpFile, []byte(best.Path), 0644)
+	}
 	fmt.Println(best.Path)
 	return nil
 }
@@ -345,63 +354,102 @@ func printShellInit(shell string) {
     param([string]$target)
     $exe = (Get-Command plx.exe -CommandType Application -ErrorAction SilentlyContinue).Source
     if (-not $exe) { return }
-    $p = if ($target) { & $exe jump $target } else { & $exe }
-    if ($p) {
-        $trimmed = ($p | Out-String).Trim()
-        if ($trimmed -and (Test-Path -LiteralPath $trimmed)) {
-            Set-Location -LiteralPath $trimmed
+    $jumpFile = "$env:LOCALAPPDATA\plx\last_jump"
+    if (Test-Path -LiteralPath $jumpFile) { Remove-Item -LiteralPath $jumpFile -Force -ErrorAction SilentlyContinue }
+
+    if ($target) {
+        & $exe jump $target | Out-Null
+    } else {
+        & $exe
+    }
+
+    if (Test-Path -LiteralPath $jumpFile) {
+        $p = (Get-Content -LiteralPath $jumpFile -Raw).Trim()
+        Remove-Item -LiteralPath $jumpFile -Force -ErrorAction SilentlyContinue
+        if ($p -and (Test-Path -LiteralPath $p)) {
+            Set-Location -LiteralPath $p
         }
     }
 }
 function plx {
     $exe = (Get-Command plx.exe -CommandType Application -ErrorAction SilentlyContinue).Source
     if (-not $exe) { return }
+
     if ($args.Count -eq 0) {
-        $p = & $exe
-        if ($p) {
-            $trimmed = ($p | Out-String).Trim()
-            if ($trimmed -and (Test-Path -LiteralPath $trimmed)) {
-                Set-Location -LiteralPath $trimmed
+        $jumpFile = "$env:LOCALAPPDATA\plx\last_jump"
+        if (Test-Path -LiteralPath $jumpFile) { Remove-Item -LiteralPath $jumpFile -Force -ErrorAction SilentlyContinue }
+
+        & $exe
+
+        if (Test-Path -LiteralPath $jumpFile) {
+            $p = (Get-Content -LiteralPath $jumpFile -Raw).Trim()
+            Remove-Item -LiteralPath $jumpFile -Force -ErrorAction SilentlyContinue
+            if ($p -and (Test-Path -LiteralPath $p)) {
+                Set-Location -LiteralPath $p
             }
         }
         return
     }
+
     if ($args[0] -eq 'jump' -and $args.Count -ge 2) {
-        $p = & $exe jump $args[1]
-        if ($p) {
-            $trimmed = ($p | Out-String).Trim()
-            if ($trimmed -and (Test-Path -LiteralPath $trimmed)) {
-                Set-Location -LiteralPath $trimmed
+        $jumpFile = "$env:LOCALAPPDATA\plx\last_jump"
+        if (Test-Path -LiteralPath $jumpFile) { Remove-Item -LiteralPath $jumpFile -Force -ErrorAction SilentlyContinue }
+
+        & $exe jump $args[1] | Out-Null
+
+        if (Test-Path -LiteralPath $jumpFile) {
+            $p = (Get-Content -LiteralPath $jumpFile -Raw).Trim()
+            Remove-Item -LiteralPath $jumpFile -Force -ErrorAction SilentlyContinue
+            if ($p -and (Test-Path -LiteralPath $p)) {
+                Set-Location -LiteralPath $p
             }
         }
         return
     }
+
     & $exe @args
 }`)
 	case "bash", "zsh":
 		fmt.Println(`x() {
-    local target
+    local jump_file="${XDG_STATE_HOME:-$HOME/.local/state}/plx/last_jump"
+    rm -f "$jump_file" 2>/dev/null
     if [ $# -eq 0 ]; then
-        target="$(command plx)"
+        command plx
     else
-        target="$(command plx jump "$@")"
+        command plx jump "$@" >/dev/null
     fi
-    if [ -n "$target" ] && [ -d "$target" ]; then
-        cd "$target" || return 1
-    fi
-}
-plx() {
-    if [ $# -eq 0 ]; then
+    if [ -f "$jump_file" ]; then
         local target
-        target="$(command plx)"
+        target="$(cat "$jump_file")"
+        rm -f "$jump_file" 2>/dev/null
         if [ -n "$target" ] && [ -d "$target" ]; then
             cd "$target" || return 1
         fi
+    fi
+}
+plx() {
+    local jump_file="${XDG_STATE_HOME:-$HOME/.local/state}/plx/last_jump"
+    if [ $# -eq 0 ]; then
+        rm -f "$jump_file" 2>/dev/null
+        command plx
+        if [ -f "$jump_file" ]; then
+            local target
+            target="$(cat "$jump_file")"
+            rm -f "$jump_file" 2>/dev/null
+            if [ -n "$target" ] && [ -d "$target" ]; then
+                cd "$target" || return 1
+            fi
+        fi
     elif [ "$1" = "jump" ] && [ -n "$2" ]; then
-        local target
-        target="$(command plx jump "$2")"
-        if [ -n "$target" ] && [ -d "$target" ]; then
-            cd "$target" || return 1
+        rm -f "$jump_file" 2>/dev/null
+        command plx jump "$2" >/dev/null
+        if [ -f "$jump_file" ]; then
+            local target
+            target="$(cat "$jump_file")"
+            rm -f "$jump_file" 2>/dev/null
+            if [ -n "$target" ] && [ -d "$target" ]; then
+                cd "$target" || return 1
+            fi
         fi
     else
         command plx "$@"
@@ -409,25 +457,42 @@ plx() {
 }`)
 	case "fish":
 		fmt.Println(`function x
+    set jump_file (test -n "$XDG_STATE_HOME"; and echo "$XDG_STATE_HOME/plx/last_jump"; or echo "$HOME/.local/state/plx/last_jump")
+    rm -f $jump_file 2>/dev/null
     if test (count $argv) -eq 0
-        set target (command plx)
+        command plx
     else
-        set target (command plx jump $argv)
+        command plx jump $argv >/dev/null
     end
-    if test -n "$target" -a -d "$target"
-        cd $target
-    end
-end
-function plx
-    if test (count $argv) -eq 0
-        set target (command plx)
+    if test -f $jump_file
+        set target (cat $jump_file)
+        rm -f $jump_file 2>/dev/null
         if test -n "$target" -a -d "$target"
             cd $target
         end
+    end
+end
+function plx
+    set jump_file (test -n "$XDG_STATE_HOME"; and echo "$XDG_STATE_HOME/plx/last_jump"; or echo "$HOME/.local/state/plx/last_jump")
+    if test (count $argv) -eq 0
+        rm -f $jump_file 2>/dev/null
+        command plx
+        if test -f $jump_file
+            set target (cat $jump_file)
+            rm -f $jump_file 2>/dev/null
+            if test -n "$target" -a -d "$target"
+                cd $target
+            end
+        end
     else if test "$argv[1]" = "jump" -a (count $argv) -ge 2
-        set target (command plx jump $argv[2])
-        if test -n "$target" -a -d "$target"
-            cd $target
+        rm -f $jump_file 2>/dev/null
+        command plx jump $argv[2] >/dev/null
+        if test -f $jump_file
+            set target (cat $jump_file)
+            rm -f $jump_file 2>/dev/null
+            if test -n "$target" -a -d "$target"
+                cd $target
+            end
         end
     else
         command plx $argv

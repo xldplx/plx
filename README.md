@@ -43,15 +43,29 @@ it solves two daily developer frictions:
 
 ## installation
 
-### build from source (requires go 1.23+)
+### one-line install (go toolchain)
+
+```bash
+go install github.com/xldplx/plx/cmd/plx@latest
+```
+
+### pre-compiled binaries (zero dependencies)
+
+download the latest archive for your platform from [github releases](https://github.com/xldplx/plx/releases):
+- windows: `plx_Windows_x86_64.zip`
+- macos (apple silicon): `plx_Darwin_arm64.tar.gz`
+- macos (intel): `plx_Darwin_x86_64.tar.gz`
+- linux: `plx_Linux_x86_64.tar.gz`
+
+extract the `plx` binary into any directory in your `$PATH`.
+
+### build from source
 
 ```bash
 git clone https://github.com/xldplx/plx.git
 cd plx
 go build -ldflags="-s -w" -o plx ./cmd/plx
 ```
-
-move the compiled `plx` (or `plx.exe` on windows) into any directory in your `$PATH`.
 
 ---
 

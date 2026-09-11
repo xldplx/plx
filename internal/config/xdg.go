@@ -47,3 +47,12 @@ func GetStateDir() (string, error) {
 	}
 	return filepath.Join(home, ".local", "state", "plx"), nil
 }
+
+// GetJumpFilePath returns the path to the temporary last_jump state file.
+func GetJumpFilePath() (string, error) {
+	dir, err := GetStateDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(dir, "last_jump"), nil
+}
